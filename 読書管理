@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Book Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .book-card { transition: transform 0.2s; }
+        .book-card:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-20">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-lg sticky top-0 z-10">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">読書管理アプリ</h1>
+            <div id="stats" class="text-sm">保存済み: 0冊</div>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto p-4">
+        <section class="mb-8">
+            <div class="flex gap-2">
+                <input type="text" id="searchInput" placeholder="本を検索（タイトル、著者名）" 
+                    class="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="searchBooks()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">検索</button>
+            </div>
+            <div id="searchResults" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"></div>
+        </section>
+
+        <hr class="my-8">
+
+        <section>
+            <h2 class="text-lg font-bold mb-4 flex items-center">
+                <span class="mr-2">📚</span> 読み終えた本 / 積読
+            </h2>
+            <div id="library" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                </div>
+        </section>
+    </main>
+
+    <script>
+        let myLibrary = JSON.parse(localStorage.getItem('myLibrary')) || [];
+
+        // 初期表示
+        updateLibraryUI();
+
+        // Google Books APIで検索
+        async function searchBooks() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<p class="col-span-full text-center">検索中...</p>';
+
+            try {
+                const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                
+                resultsDiv.innerHTML = '';
+                data.items.forEach(item => {
+                    const info = item.volumeInfo;
+                    const book = {
+                        id: item.id,
+                        title: info.title,
+                        author: info.authors ? info.authors[0] : '不明',
+                        thumbnail: info.imageLinks ? info.imageLinks.thumbnail : 'https://via.placeholder.com/128x192?text=No+Image'
+                    };
+
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-2 border rounded shadow-sm text-sm';
+                    card.innerHTML = `
+                        <img src="${book.thumbnail}" class="w-full h-40 object-cover mb-2">
+                        <div class="font-bold truncate">${book.title}</div>
+                        <button onclick='addToLibrary(${JSON.stringify(book).replace(/'/g, "&apos;")})' 
+                            class="mt-2 w-full bg-green-500 text-white py-1 rounded text-xs hover:bg-green-600">
+                            追加
+                        </button>
+                    `;
+                    resultsDiv.appendChild(card);
+                });
+            } catch (e) {
+                resultsDiv.innerHTML = '<p class="col-span-full text-red-500">検索に失敗しました</p>';
+            }
+        }
+
+        // ライブラリに追加
+        function addToLibrary(book) {
+            if (!myLibrary.find(b => b.id === book.id)) {
+                myLibrary.push(book);
+                saveAndRefresh();
+            } else {
+                alert('既に登録されています');
+            }
+        }
+
+        // ライブラリから削除
+        function removeFromLibrary(id) {
+            myLibrary = myLibrary.filter(b => b.id !== id);
+            saveAndRefresh();
+        }
+
+        // データの保存とUI更新
+        function saveAndRefresh() {
+            localStorage.setItem('myLibrary', JSON.stringify(myLibrary));
+            updateLibraryUI();
+        }
+
+        function updateLibraryUI() {
+            const libraryDiv = document.getElementById('library');
+            const stats = document.getElementById('stats');
+            
+            stats.innerText = `保存済み: ${myLibrary.length}冊`;
+            libraryDiv.innerHTML = '';
+
+            myLibrary.forEach(book => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-2 border rounded shadow-md text-sm book-card';
+                card.innerHTML = `
+                    <img src="${book.thumbnail}" class="w-full h-40 object-cover mb-2">
+                    <div class="font-bold truncate">${book.title}</div>
+                    <div class="text-gray-500 text-xs">${book.author}</div>
+                    <button onclick="removeFromLibrary('${book.id}')" 
+                        class="mt-2 w-full border border-red-500 text-red-500 py-1 rounded text-xs hover:bg-red-50">
+                        削除
+                    </button>
+                `;
+                libraryDiv.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
